@@ -3,21 +3,34 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3200",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "next start -p 3200",
+    "lint": "eslint",
+    "services": "concurrently -k -n gateway,auth,account,product,bill,staff -c red,blue,yellow,green,magenta,cyan \"npm --prefix backend/gateway-service run dev\" \"npm --prefix backend/auth-service run dev\" \"npm --prefix backend/account-service run dev\" \"npm --prefix backend/product-service run dev\" \"npm --prefix backend/bill-service run dev\" \"npm --prefix backend/staff-service run dev\"",
+    "dev:all": "concurrently -n web,gateway,auth,account,product,bill,staff -c gray,red,blue,yellow,green,magenta,cyan \"npm run dev\" \"npm --prefix backend/gateway-service run dev\" \"npm --prefix backend/auth-service run dev\" \"npm --prefix backend/account-service run dev\" \"npm --prefix backend/product-service run dev\" \"npm --prefix backend/bill-service run dev\" \"npm --prefix backend/staff-service run dev\"",
+    "install:services": "npm --prefix backend/gateway-service install && npm --prefix backend/auth-service install && npm --prefix backend/account-service install && npm --prefix backend/product-service install && npm --prefix backend/bill-service install && npm --prefix backend/staff-service install"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.103.2",
+    "date-fns": "^4.4.0",
+    "html2canvas": "^1.4.1",
+    "html5-qrcode": "^2.3.8",
+    "jose": "^6.2.12",
+    "jspdf": "^4.2.1",
     "next": "16.3.5",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "react-to-print": "^3.3.0",
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",
