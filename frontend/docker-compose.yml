@@ -1,0 +1,16 @@
+# =====================================================================
+# The full BillEasy stack (MySQL + all services + gateway + web) is
+# described by the compose file at the repository root.
+#
+# It lives there because the backend services are in ../services and
+# must be built from outside this frontend directory.
+#
+# Run from either directory:
+#   docker compose up --build
+#
+# This file simply includes the root stack so `docker compose` still
+# works when run from inside frontend/.
+# =====================================================================
+
+include:
+  - path: ../docker-compose.yml

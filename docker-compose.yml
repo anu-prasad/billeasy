@@ -1,0 +1,285 @@
+# =====================================================================
+# BillEasy — full stack in Docker (run from this directory)
+#
+#   MySQL 8.0 × 5  (auth-db, account-db, product-db, bill-db, staff-db)
+#                  one database container per service, seeded from
+#                  services/*/db.sql
+#                  ↓
+#                  gateway-service (API gateway)
+#                  ↓  next.config.ts rewrites /api/* to it
+#                  web (Next.js frontend)
+#
+# Start everything (builds all images first):
+#   docker compose up --build
+#
+#   Web   : http://localhost:3200   (demo@billeasy.com / demo123)
+#   API   : http://localhost:4000   (gateway — handy for debugging)
+#   MySQL : localhost:3307 auth, 3308 account, 3309 product,
+#           3310 bill, 3311 staff (root / ${MYSQL_PASSWORD:-billeasy_root})
+#
+# Override secrets in a .env file next to this compose file:
+#   MYSQL_PASSWORD=...
+#   JWT_SECRET=...
+#
+# Note: the init SQL only runs on an EMPTY data volume. To re-seed:
+#   docker compose down -v && docker compose up --build
+# =====================================================================
+
+name: billeasy
+
+x-mysql-env: &mysql-env
+  MYSQL_PORT: "3306"
+  MYSQL_USER: root
+  MYSQL_PASSWORD: ${MYSQL_PASSWORD:-billeasy_root}
+
+x-db-healthcheck: &db-healthcheck
+  test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+  interval: 5s
+  timeout: 5s
+  retries: 20
+  start_period: 30s
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+
+services:
+  # -------------------------------------------------------------------
+  # Databases — one MySQL container per service
+  # -------------------------------------------------------------------
+  auth-db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-billeasy_root}
+    volumes:
+      - auth-db-data:/var/lib/mysql
+      - ./services/auth-service/db.sql:/docker-entrypoint-initdb.d/01-auth.sql:ro
+    ports:
+      - "3307:3306" # change/remove if a local MySQL already uses 3307
+    healthcheck: *db-healthcheck
+
+  account-db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-billeasy_root}
+    volumes:
+      - account-db-data:/var/lib/mysql
+      - ./services/account-service/db.sql:/docker-entrypoint-initdb.d/01-account.sql:ro
+    ports:
+      - "3308:3306" # change/remove if a local MySQL already uses 3308
+    healthcheck: *db-healthcheck
+
+  product-db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-billeasy_root}
+    volumes:
+      - product-db-data:/var/lib/mysql
+      - ./services/product-service/db.sql:/docker-entrypoint-initdb.d/01-product.sql:ro
+    ports:
+      - "3309:3306" # change/remove if a local MySQL already uses 3309
+    healthcheck: *db-healthcheck
+
+  bill-db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-billeasy_root}
+    volumes:
+      - bill-db-data:/var/lib/mysql
+      - ./services/bill-service/db.sql:/docker-entrypoint-initdb.d/01-bill.sql:ro
+    ports:
+      - "3310:3306" # change/remove if a local MySQL already uses 3310
+    healthcheck: *db-healthcheck
+
+  staff-db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-billeasy_root}
+    volumes:
+      - staff-db-data:/var/lib/mysql
+      - ./services/staff-service/db.sql:/docker-entrypoint-initdb.d/01-staff.sql:ro
+    ports:
+      - "3311:3306" # change/remove if a local MySQL already uses 3311
+    healthcheck: *db-healthcheck
+
+  # -------------------------------------------------------------------
+  # Microservices (each built from its own Dockerfile)
+  # -------------------------------------------------------------------
+  auth-service:
+    <<: *service-defaults
+    build:
+      context: ./services/auth-service
+    environment:
+      <<: *mysql-env
+      MYSQL_HOST: auth-db
+      JWT_SECRET: ${JWT_SECRET:-billeasy-super-secret-key-2026}
+      PORT: "4001"
+      MYSQL_DATABASE: billeasy_auth
+      ACCOUNT_SERVICE_URL: http://account-service:4002
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  account-service:
+    <<: *service-defaults
+    build:
+      context: ./services/account-service
+    environment:
+      <<: *mysql-env
+      MYSQL_HOST: account-db
+      JWT_SECRET: ${JWT_SECRET:-billeasy-super-secret-key-2026}
+      PORT: "4002"
+      MYSQL_DATABASE: billeasy_accounts
+      AUTH_SERVICE_URL: http://auth-service:4001
+      PRODUCT_SERVICE_URL: http://product-service:4003
+      BILL_SERVICE_URL: http://bill-service:4004
+      STAFF_SERVICE_URL: http://staff-service:4005
+    depends_on:
+      account-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  product-service:
+    <<: *service-defaults
+    build:
+      context: ./services/product-service
+    environment:
+      <<: *mysql-env
+      MYSQL_HOST: product-db
+      JWT_SECRET: ${JWT_SECRET:-billeasy-super-secret-key-2026}
+      PORT: "4003"
+      MYSQL_DATABASE: billeasy_products
+      AUTH_SERVICE_URL: http://auth-service:4001
+    depends_on:
+      product-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4003/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  bill-service:
+    <<: *service-defaults
+    build:
+      context: ./services/bill-service
+    environment:
+      <<: *mysql-env
+      MYSQL_HOST: bill-db
+      JWT_SECRET: ${JWT_SECRET:-billeasy-super-secret-key-2026}
+      PORT: "4004"
+      MYSQL_DATABASE: billeasy_bills
+      AUTH_SERVICE_URL: http://auth-service:4001
+      ACCOUNT_SERVICE_URL: http://account-service:4002
+    depends_on:
+      bill-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4004/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  staff-service:
+    <<: *service-defaults
+    build:
+      context: ./services/staff-service
+    environment:
+      <<: *mysql-env
+      MYSQL_HOST: staff-db
+      JWT_SECRET: ${JWT_SECRET:-billeasy-super-secret-key-2026}
+      PORT: "4005"
+      MYSQL_DATABASE: billeasy_staff
+      AUTH_SERVICE_URL: http://auth-service:4001
+    depends_on:
+      staff-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4005/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # -------------------------------------------------------------------
+  # API gateway — routes /api/* to the services above
+  # -------------------------------------------------------------------
+  gateway:
+    build:
+      context: ./services/gateway-service
+    restart: unless-stopped
+    environment:
+      GATEWAY_PORT: "4000"
+      AUTH_SERVICE_URL: http://auth-service:4001
+      ACCOUNT_SERVICE_URL: http://account-service:4002
+      PRODUCT_SERVICE_URL: http://product-service:4003
+      BILL_SERVICE_URL: http://bill-service:4004
+      STAFF_SERVICE_URL: http://staff-service:4005
+    ports:
+      - "4000:4000" # optional — the web app talks to it internally
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      account-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      bill-service:
+        condition: service_healthy
+      staff-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # -------------------------------------------------------------------
+  # Next.js web app (see ./frontend/Dockerfile)
+  # -------------------------------------------------------------------
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # next.config.ts bakes this into the /api/* rewrites at build time.
+        GATEWAY_URL: http://gateway:4000
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-billeasy-super-secret-key-2026}
+    ports:
+      - "3200:3200"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3200/login >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  auth-db-data:
+  account-db-data:
+  product-db-data:
+  bill-db-data:
+  staff-db-data:

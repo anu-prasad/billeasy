@@ -1,0 +1,21 @@
+# Dependencies (installed inside the image)
+node_modules
+
+# Local env files — never bake secrets into images.
+# Config is passed at runtime via docker-compose (environment:) instead.
+.env
+.env.*
+!.env.example
+
+# Logs & debug
+npm-debug.log*
+*.log
+
+# Docs & OS noise
+README.md
+.DS_Store
+Thumbs.db
+
+# Docker files themselves
+Dockerfile
+.dockerignore

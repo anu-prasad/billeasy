@@ -3,6 +3,9 @@ import type { NextConfig } from 'next';
 const GATEWAY = process.env.GATEWAY_URL || 'http://localhost:4000';
 
 const nextConfig: NextConfig = {
+   // `standalone` makes `next build` emit a minimal, self-contained server
+   // (.next/standalone/server.js) that the Docker image can run directly.
+   output: 'standalone',
    allowedDevOrigins: ['knox-nonobserving-epistemically.ngrok-free.dev'],
   // Allow base64 images for logo preview
   images: {
